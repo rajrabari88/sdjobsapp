@@ -3,7 +3,6 @@ import '../services/job_service.dart';
 import '../services/saved_job_service.dart';
 import '../models/job.dart';
 import '../widgets/custom_appbar.dart';
-import '../widgets/search_bar.dart';
 import '../widgets/job_card.dart';
 import '../widgets/job_application_modal.dart';
 
@@ -32,7 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool loading = true;
   Map<String, dynamic>? userData;
   List<Job> featuredJobs = [];
-  List<dynamic> categories = [];
+
   List<Job> recentJobs = [];
 
   final TextEditingController _searchController = TextEditingController();
@@ -51,7 +50,7 @@ class _HomeScreenState extends State<HomeScreen> {
         featuredJobs = (data['featured_jobs'] as List<dynamic>)
             .map((item) => item as Job)
             .toList();
-        categories = data['categories'];
+
         recentJobs = (data['recent_jobs'] as List<dynamic>)
             .map((item) => item as Job)
             .toList();
@@ -150,7 +149,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: CustomAppBar(
         title: 'SDJobs',
         showBackButton: false,
-        showProfile: true,
+
         // Assuming CustomAppBar adapts to dark theme
       ),
       body: SingleChildScrollView(
@@ -161,17 +160,8 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 20),
             _buildWelcomeCard(),
             const SizedBox(height: 24),
-            // Assuming CustomSearchBar is updated for dark theme
-            CustomSearchBar(
-              controller: _searchController,
-              hint: 'Search jobs...',
-              onFilterTap: () {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('Filter opened')));
-              },
-            ),
-            const SizedBox(height: 30),
+            _buildStatsHeader(),
+            _buildStaticStats(),
 
             // --- Featured Jobs Section (Horizontal Scroll) ---
             if (featuredJobs.isNotEmpty) ...[
@@ -198,14 +188,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               ),
-              const SizedBox(height: 30),
-            ],
-
-            // --- Job Categories Section (Chips) ---
-            if (categories.isNotEmpty) ...[
-              _buildSectionHeader('Explore Job Categories'),
-              const SizedBox(height: 15),
-              _buildCategoryChips(),
               const SizedBox(height: 30),
             ],
 
@@ -275,6 +257,72 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildStaticStats() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _statItem("1,200+", "Employers"),
+          _statItem("4,500+", "Jobs "),
+          _statItem("22+", "Categories"),
+          _statItem("9,800+", "Hires"),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsHeader() {
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Text(
+        "📊 Platform Snapshot",
+        style: TextStyle(
+          color: textLightColor,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _statItem(String number, String label) {
+    return Container(
+      width: 80, // perfect size – auto-wrap handles layout
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: accentNeon.withOpacity(0.6), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: accentNeon.withOpacity(0.15),
+            blurRadius: 8,
+            spreadRadius: 1,
+          ),
+        ],
+        color: primaryDarkColor.withOpacity(0.7),
+      ),
+      child: Column(
+        children: [
+          Text(
+            number,
+            style: const TextStyle(
+              color: accentNeon,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade300, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSectionHeader(String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
@@ -285,42 +333,6 @@ class _HomeScreenState extends State<HomeScreen> {
           fontWeight: FontWeight.w600,
           color: textLightColor, // Light text
         ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryChips() {
-    return SizedBox(
-      height: 40,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: categories.length,
-        itemBuilder: (context, index) {
-          final category = categories[index];
-          return Padding(
-            padding: const EdgeInsets.only(right: 10),
-            child: ActionChip(
-              // Using ActionChip for a better interactive look
-              label: Text(category),
-              backgroundColor: secondaryAccent.withOpacity(
-                0.1,
-              ), // Subtle dark background
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-                side: BorderSide(
-                  color: secondaryAccent.withOpacity(0.5),
-                ), // Neon border
-              ),
-              labelStyle: const TextStyle(
-                color: secondaryAccent, // Primary color text
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-              onPressed: () {},
-            ),
-          );
-        },
       ),
     );
   }

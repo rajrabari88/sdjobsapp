@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'support_chat_screen.dart';
+
 // import '../widgets/custom_appbar.dart'; // Assuming CustomAppBar is adapted for dark theme
 
 // --- DARK THEME CONSTANTS (Consistency) ---
@@ -155,27 +157,16 @@ class HelpSupportScreen extends StatelessWidget {
           // Live Chat Button (Neon Accent)
           ElevatedButton.icon(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Opening live chat... (Dummy action)'),
-                ),
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SupportChatScreen()),
               );
             },
-            icon: const Icon(
-              Icons.chat_bubble_outline,
-              color: primaryDarkColor,
-            ),
-            label: const Text('Start Live Chat'),
+            icon: Icon(Icons.message_outlined, color: primaryDarkColor),
+            label: Text('Send Message'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: accentNeon, // Neon Accent for the button
-              foregroundColor:
-                  primaryDarkColor, // Dark text/icon on Neon button
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              shadowColor: accentNeon.withOpacity(0.6), // Subtle glow
-              elevation: 8,
+              backgroundColor: accentNeon,
+              foregroundColor: primaryDarkColor,
             ),
           ),
         ],

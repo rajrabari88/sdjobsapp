@@ -46,14 +46,14 @@ class JobService {
   }
 
   // 🔍 Search Jobs
-  static Future<List<Job>> searchJobs(String query) async {
+  static Future<List<Job>> searchJobs(String query, String userId) async {
     if (query.trim().isEmpty) return [];
 
-    final response = await http.get(
-      Uri.parse(
-        '$baseUrl/search_jobs.php?q=${Uri.encodeQueryComponent(query)}',
-      ),
+    final url = Uri.parse(
+      '$baseUrl/search_jobs.php?q=${Uri.encodeQueryComponent(query)}&user_id=$userId',
     );
+
+    final response = await http.get(url);
 
     if (response.statusCode != 200) {
       throw Exception("Search failed");
@@ -61,14 +61,13 @@ class JobService {
 
     final data = json.decode(response.body);
 
-    // If API returns -> { status: success, jobs: [...] }
-    if (data is Map && data['jobs'] is List) {
-      return (data['jobs'] as List).map((item) => Job.fromJson(item)).toList();
-    }
+    // API format:
+    // { status: success, results: [...] }
 
-    // If API returns direct list
-    if (data is List) {
-      return data.map((item) => Job.fromJson(item)).toList();
+    if (data is Map && data["results"] is List) {
+      return (data["results"] as List)
+          .map((item) => Job.fromJson(item))
+          .toList();
     }
 
     return [];

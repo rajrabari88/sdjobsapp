@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-// --- DARK THEME CONSTANTS (Re-used from HomeScreen for consistency) ---
-const Color primaryDarkColor = Color(0xFF0D0D12); // Deep Navy/Near Black
-const Color accentNeon = Color(0xFF00FFFF); // Neon Cyan/Blue
-const Color secondaryAccent = Color(0xFF4A64FE); // Subtle Purple-Blue
-const Color cardDarkColor = Color(0xFF1B1B25); // Card Background
+// --- DARK THEME CONSTANTS ---
+const Color primaryDarkColor = Color(0xFF0D0D12);
+const Color accentNeon = Color(0xFF00FFFF);
+const Color secondaryAccent = Color(0xFF4A64FE);
+const Color cardDarkColor = Color(0xFF1B1B25);
 const Color textLightColor = Colors.white;
 
 class JobCard extends StatelessWidget {
@@ -17,9 +17,12 @@ class JobCard extends StatelessWidget {
   final String experience;
   final String postedDate;
   final String? logoUrl;
+
   final VoidCallback? onTap;
   final VoidCallback? onApply;
+
   final bool isSaved;
+  final bool isApplied; // ⭐ NEW — Already applied?
   final VoidCallback? onSaveTap;
 
   const JobCard({
@@ -36,15 +39,14 @@ class JobCard extends StatelessWidget {
     this.onTap,
     this.onApply,
     this.isSaved = false,
+    this.isApplied = false, // ⭐ default false
     this.onSaveTap,
   });
 
   @override
-  @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
 
-    // Auto responsive sizes
     double titleSize = width < 360 ? 16 : 18;
     double subtitleSize = width < 360 ? 12 : 14;
     double smallTextSize = width < 360 ? 11 : 13;
@@ -80,7 +82,7 @@ class JobCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ✅ TOP SECTION SAFE FROM OVERFLOW
+            // TOP SECTION
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -105,7 +107,6 @@ class JobCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
 
-                // ✅ TEXT WILL AUTO-SCALE SAFELY
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,7 +115,6 @@ class JobCard extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        textScaler: const TextScaler.linear(1),
                         style: TextStyle(
                           fontSize: titleSize,
                           fontWeight: FontWeight.w700,
@@ -150,7 +150,7 @@ class JobCard extends StatelessWidget {
 
             const SizedBox(height: 15),
 
-            // ✅ CHIPS ALWAYS WRAP SAFELY
+            // CHIPS
             Wrap(
               spacing: 10,
               runSpacing: 6,
@@ -162,7 +162,6 @@ class JobCard extends StatelessWidget {
 
             const SizedBox(height: 15),
 
-            // ✅ BOTTOM INFO NEVER BREAKS
             Row(
               children: [
                 Icon(
@@ -182,6 +181,7 @@ class JobCard extends StatelessWidget {
                     ),
                   ),
                 ),
+
                 const SizedBox(width: 12),
                 Icon(
                   Icons.work_history_rounded,
@@ -210,20 +210,22 @@ class JobCard extends StatelessWidget {
 
             const SizedBox(height: 18),
 
-            /// APPLY BUTTON
+            /// ⭐ APPLY BUTTON (Disable if already applied)
             SizedBox(
-              width: double.infinity, // ✅ Full width for symmetry
+              width: double.infinity,
               height: 44,
               child: TextButton(
-                onPressed: onApply ?? () {},
+                onPressed: isApplied ? null : onApply, // ⭐ Disabled here
                 style: TextButton.styleFrom(
-                  backgroundColor: secondaryAccent,
+                  backgroundColor: isApplied
+                      ? Colors.grey.shade700
+                      : secondaryAccent,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
                 child: Text(
-                  "Apply Now",
+                  isApplied ? "Applied" : "Apply Now", // ⭐ Button text change
                   style: TextStyle(
                     fontSize: subtitleSize,
                     fontWeight: FontWeight.w700,

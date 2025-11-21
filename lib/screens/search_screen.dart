@@ -8,6 +8,7 @@ import '../widgets/job_application_modal.dart';
 import '../widgets/custom_appbar.dart';
 import '../widgets/search_bar.dart';
 import '../widgets/job_card.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // --- DARK THEME CONSTANTS (Consistency is key!) ---
 const Color primaryDarkColor = Color(
@@ -35,18 +36,15 @@ class _SearchScreenState extends State<SearchScreen> {
 
   final List<String> _popularCategories = const [
     'Flutter',
-    'Design',
-    'Remote',
-    'Finance',
-    'DevOps',
     'Manager',
+    'Design',
+    'DevOps',
+    'Marketing',
+    'Finance',
+    'Sales',
   ];
 
-  final List<String> _recentSearches = const [
-    'Senior Developer',
-    'Part Time Pune',
-    'Data Science',
-  ];
+  List<String> _recentSearches = [];
 
   List<Job> _filteredJobs = [];
   bool _loading = false;
@@ -57,7 +55,7 @@ class _SearchScreenState extends State<SearchScreen> {
     super.initState();
     _filteredJobs = List.from(_allJobs);
     _controller.addListener(_onSearchChanged);
-    // load profile data to prefill application modal
+    _loadRecentSearches();
     JobService.fetchProfileData(widget.userId)
         .then((data) {
           setState(() {
@@ -94,17 +92,42 @@ class _SearchScreenState extends State<SearchScreen> {
     });
   }
 
+  Future<void> _loadRecentSearches() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _recentSearches = prefs.getStringList('recentSearches') ?? [];
+    });
+  }
+
+  Future<void> _saveRecentSearch(String query) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // Duplicate remove & latest item upar add
+    _recentSearches.remove(query);
+    _recentSearches.insert(0, query);
+
+    // Sirf last 10 searches store karna
+    if (_recentSearches.length > 10) {
+      _recentSearches = _recentSearches.sublist(0, 10);
+    }
+
+    await prefs.setStringList('recentSearches', _recentSearches);
+  }
+
   Future<void> _performSearch(String query) async {
     setState(() {
       _loading = true;
     });
+
+    // 🔥 ADD THIS — Save search history dynamically
+    await _saveRecentSearch(query);
+
     try {
-      // --- DATA FETCHING LOGIC REMAINS UNCHANGED ---
-      final results = await JobService.searchJobs(query);
+      final results = await JobService.searchJobs(query, widget.userId);
+
       setState(() {
         _filteredJobs = results;
       });
-      // ---------------------------------------------
     } catch (e) {
       debugPrint('Search error: $e');
       setState(() {
@@ -201,7 +224,7 @@ class _SearchScreenState extends State<SearchScreen> {
               controller: _controller,
               hint: 'Search jobs by title, company, or skill...',
               // Assuming CustomSearchBar is styled for dark theme
-              onChanged: (_) => _onSearchChanged(),
+              onChanged: (_) {},
               onFilterTap: () {
                 ScaffoldMessenger.of(context).showSnackBar(
                   // Neon SnackBar

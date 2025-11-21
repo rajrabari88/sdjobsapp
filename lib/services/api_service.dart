@@ -37,4 +37,29 @@ class ApiService {
       throw Exception('Failed to search jobs');
     }
   }
+  // ---------------- CHAT APIs ----------------
+
+  static Future<List<dynamic>> getMessages(String userId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/get_messages.php?user_id=$userId'),
+    );
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Failed to fetch messages');
+    }
+  }
+
+  static Future<bool> sendMessage(String userId, String message) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/send_message.php'),
+      body: {"user_id": userId, "message": message},
+    );
+
+    if (response.statusCode == 200) {
+      return true;
+    }
+    return false;
+  }
 }

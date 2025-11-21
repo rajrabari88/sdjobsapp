@@ -8,6 +8,7 @@ class Job {
   final String logoText;
   final String experience;
   bool isSaved;
+  bool isApplied;
 
   Job({
     required this.id,
@@ -19,6 +20,7 @@ class Job {
     required this.logoText,
     this.experience = '2-5 yrs',
     this.isSaved = false,
+    this.isApplied = false,
   });
 
   factory Job.fromJson(Map<String, dynamic> json) {
@@ -32,6 +34,7 @@ class Job {
       experience: json['experience'] ?? '2-5 yrs',
       logoText: (json['company'] ?? 'J').substring(0, 1).toUpperCase(),
       isSaved: json['is_saved'] == 1 || json['is_saved'] == true,
+      isApplied: json['applied'] == true,
     );
   }
 }
