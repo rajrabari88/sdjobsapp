@@ -5,18 +5,16 @@ import '../models/job.dart';
 import '../widgets/custom_appbar.dart';
 import '../widgets/job_card.dart';
 import '../widgets/job_application_modal.dart';
+import '../utils/responsive.dart';
+import 'dart:async'; // Timer ke liye
+import 'package:shared_preferences/shared_preferences.dart'; // SharedPreferences ke liye
+import '../services/api_service.dart'; // ApiService ke liye
 
-// --- NEW DARK THEME CONSTANTS ---
-const Color primaryDarkColor = Color(
-  0xFF0D0D12,
-); // Deep Navy/Near Black Background
-const Color accentNeon = Color(0xFF00FFFF); // Neon Cyan/Blue for highlights
-const Color secondaryAccent = Color(
-  0xFF4A64FE,
-); // A subtle purple-blue for contrast
-const Color cardDarkColor = Color(
-  0xFF1B1B25,
-); // Slightly lighter dark background for cards
+// --- DARK THEME CONSTANTS ---
+const Color primaryDarkColor = Color(0xFF0D0D12);
+const Color accentNeon = Color(0xFF00FFFF);
+const Color secondaryAccent = Color.fromARGB(255, 241, 128, 36);
+const Color cardDarkColor = Color(0xFF1B1B25);
 const Color textLightColor = Colors.white;
 
 class HomeScreen extends StatefulWidget {
@@ -31,26 +29,58 @@ class _HomeScreenState extends State<HomeScreen> {
   bool loading = true;
   Map<String, dynamic>? userData;
   List<Job> featuredJobs = [];
-
   List<Job> recentJobs = [];
+  bool hasUnread = false;
+  String userId = "0";
 
+  Timer? _unreadTimer;
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
+    loadUserId();
     fetchHomeData();
+    // checkUnreadLoop(); // Uncomment if you want unread messages check
+  }
+
+  Future<void> loadUserId() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    userId = prefs.getString("userId") ?? "0";
+  }
+
+  // --- OPTIONAL: Unread messages check loop ---
+  void checkUnreadLoop() {
+    _unreadTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (userId == "0") return;
+
+      bool unread = await ApiService.checkUnread(userId);
+      if (!mounted) return;
+
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      prefs.setBool("hasUnreadMessages", unread);
+
+      setState(() {
+        hasUnread = unread;
+      });
+    });
   }
 
   Future<void> fetchHomeData() async {
     try {
       final data = await JobService.fetchHomeData(widget.userId);
+      if (!mounted) return;
+
       setState(() {
         userData = data['user'];
         featuredJobs = (data['featured_jobs'] as List<dynamic>)
             .map((item) => item as Job)
             .toList();
-
         recentJobs = (data['recent_jobs'] as List<dynamic>)
             .map((item) => item as Job)
             .toList();
@@ -58,12 +88,12 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     } catch (e) {
       debugPrint("Error fetching data: $e");
+      if (!mounted) return;
+
       setState(() => loading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load data in dark mode.')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to load data in dark mode.')),
+      );
     }
   }
 
@@ -71,12 +101,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final previous = job.isSaved;
     setState(() => job.isSaved = !job.isSaved);
 
-    // Persist change to backend
     if (job.isSaved) {
-      // try to add
       SavedJobService.addSaved(widget.userId, job.id).then((ok) {
+        if (!mounted) return;
         if (!ok) {
-          // revert
           setState(() => job.isSaved = previous);
           ScaffoldMessenger.of(
             context,
@@ -84,8 +112,8 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       });
     } else {
-      // try to remove
       SavedJobService.removeSaved(widget.userId, job.id).then((ok) {
+        if (!mounted) return;
         if (!ok) {
           setState(() => job.isSaved = previous);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -116,8 +144,8 @@ class _HomeScreenState extends State<HomeScreen> {
         userId: widget.userId,
       ),
     ).then((result) {
+      if (!mounted) return;
       if (result == true) {
-        // Application submitted successfully
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✅ Your application has been submitted!'),
@@ -132,6 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _unreadTimer?.cancel();
     super.dispose();
   }
 
@@ -149,29 +178,28 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: CustomAppBar(
         title: 'SDJobs',
         showBackButton: false,
-
-        // Assuming CustomAppBar adapts to dark theme
+        hasUnread: hasUnread,
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 20),
+            SizedBox(height: Responsive.isSmall(context) ? 16 : 24),
             _buildWelcomeCard(),
-            const SizedBox(height: 24),
+            SizedBox(height: Responsive.isSmall(context) ? 16 : 24),
             _buildStatsHeader(),
             _buildStaticStats(),
-
-            // --- Featured Jobs Section (Horizontal Scroll) ---
             if (featuredJobs.isNotEmpty) ...[
               _buildSectionHeader('🚀 Featured Opportunities'),
-              const SizedBox(height: 15),
+              SizedBox(height: Responsive.isSmall(context) ? 12 : 16),
               SizedBox(
-                height: 260,
+                height: Responsive.featuredCardWidth(context) * 0.95,
                 child: ListView.builder(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.only(left: 16),
+                  padding: Responsive.contentPadding(
+                    context,
+                  ).copyWith(left: 16),
                   itemCount: featuredJobs.length,
                   itemBuilder: (context, index) {
                     return Padding(
@@ -188,66 +216,68 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               ),
-              const SizedBox(height: 30),
+              SizedBox(height: Responsive.isSmall(context) ? 20 : 28),
             ],
-
-            // --- Recently Added Jobs Section (Vertical List) ---
             if (recentJobs.isNotEmpty) ...[
               _buildSectionHeader('Latest Listings'),
-              const SizedBox(height: 15),
+              SizedBox(height: Responsive.isSmall(context) ? 12 : 16),
               _buildRecentJobsList(),
             ],
-
-            const SizedBox(height: 30),
+            SizedBox(height: Responsive.isSmall(context) ? 20 : 30),
           ],
         ),
       ),
     );
   }
 
+  // --- WIDGETS ---
   Widget _buildWelcomeCard() {
+    final pad = Responsive.contentPadding(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: pad,
       child: Container(
         decoration: BoxDecoration(
-          color: cardDarkColor, // Dark card background
+          color: cardDarkColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.1),
-            width: 1.5,
-          ), // Subtle light border
+          border: Border.all(color: Colors.white.withOpacity(0.1), width: 1.5),
         ),
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.all(Responsive.isSmall(context) ? 16 : 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Welcome, ${userData?['name'] ?? 'Job Seeker'}!',
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
-                fontSize: 22,
-                color: textLightColor, // Light text color
+                fontSize: Responsive.fontSize(context, 22),
+                color: textLightColor,
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: Responsive.isSmall(context) ? 6 : 8),
             Text(
               'Your next career move is waiting.',
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 15),
+              style: TextStyle(
+                color: Colors.grey.shade400,
+                fontSize: Responsive.fontSize(context, 15),
+              ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: Responsive.isSmall(context) ? 10 : 12),
             Row(
               children: [
                 Icon(
                   Icons.location_on_rounded,
                   color: accentNeon,
-                  size: 20,
-                ), // Neon icon
-                const SizedBox(width: 8),
+                  size: Responsive.isSmall(context) ? 18 : 20,
+                ),
+                SizedBox(width: Responsive.isSmall(context) ? 6 : 8),
                 Text(
                   userData?['location'] != null
                       ? 'Targeting ${userData!['location']}'
                       : 'Location preference not set',
-                  style: TextStyle(color: Colors.grey.shade300, fontSize: 14),
+                  style: TextStyle(
+                    color: Colors.grey.shade300,
+                    fontSize: Responsive.fontSize(context, 14),
+                  ),
                 ),
               ],
             ),
@@ -259,12 +289,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildStaticStats() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           _statItem("1,200+", "Employers"),
-          _statItem("4,500+", "Jobs "),
+          _statItem("4,500+", "Jobs"),
           _statItem("22+", "Categories"),
           _statItem("9,800+", "Hires"),
         ],
@@ -273,50 +303,78 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildStatsHeader() {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Text(
-        "📊 Platform Snapshot",
-        style: TextStyle(
-          color: textLightColor,
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-        ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: accentNeon.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: accentNeon.withOpacity(0.4), width: 1),
+            ),
+            child: Icon(Icons.analytics_rounded, color: accentNeon, size: 16),
+          ),
+          const SizedBox(width: 10),
+          const Text(
+            "Platform Snapshot",
+            style: TextStyle(
+              color: textLightColor,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _statItem(String number, String label) {
+    final width = MediaQuery.of(context).size.width;
+    double boxWidth = width < 360
+        ? 70
+        : width < 420
+        ? 78
+        : width < 600
+        ? 85
+        : 95;
+    double numberSize = width < 360 ? 13 : 15;
+    double labelSize = width < 360 ? 10 : 11;
+
     return Container(
-      width: 80, // perfect size – auto-wrap handles layout
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      width: boxWidth,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: accentNeon.withOpacity(0.6), width: 1.2),
+        color: primaryDarkColor.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: accentNeon.withOpacity(0.5), width: 1),
         boxShadow: [
           BoxShadow(
-            color: accentNeon.withOpacity(0.15),
-            blurRadius: 8,
+            color: accentNeon.withOpacity(0.12),
+            blurRadius: 10,
             spreadRadius: 1,
           ),
         ],
-        color: primaryDarkColor.withOpacity(0.7),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             number,
-            style: const TextStyle(
+            textAlign: TextAlign.center,
+            style: TextStyle(
               color: accentNeon,
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+              fontSize: numberSize,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade300, fontSize: 12),
+            style: TextStyle(color: Colors.grey.shade300, fontSize: labelSize),
           ),
         ],
       ),
@@ -331,14 +389,13 @@ class _HomeScreenState extends State<HomeScreen> {
         style: const TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          color: textLightColor, // Light text
+          color: textLightColor,
         ),
       ),
     );
   }
 
   Widget _buildRecentJobsList() {
-    // Note: If JobCard is also updated to be dark, this will look great.
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Column(
@@ -365,7 +422,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- Featured Job Card (Neon Dark Design) ---
+// --- FEATURED JOB CARD ---
 class _FeaturedJobCard extends StatelessWidget {
   final Job job;
   final VoidCallback? onApply;
@@ -375,11 +432,11 @@ class _FeaturedJobCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardW = Responsive.featuredCardWidth(context);
     return Container(
-      width: 280,
+      width: cardW,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        // High-contrast, futuristic look using a subtle dark gradient
         gradient: LinearGradient(
           colors: [
             secondaryAccent.withOpacity(0.2),
@@ -391,7 +448,7 @@ class _FeaturedJobCard extends StatelessWidget {
         border: Border.all(color: secondaryAccent.withOpacity(0.4), width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: accentNeon.withOpacity(0.15), // Neon glow effect
+            color: accentNeon.withOpacity(0.15),
             blurRadius: 20,
             offset: const Offset(0, 5),
           ),
@@ -401,40 +458,36 @@ class _FeaturedJobCard extends StatelessWidget {
         color: Colors.transparent,
         borderRadius: BorderRadius.circular(20),
         child: InkWell(
-          onTap: () {
-            /* Handle job tap */
-          },
+          onTap: onApply,
           borderRadius: BorderRadius.circular(20),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(Responsive.isSmall(context) ? 14 : 20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Logo + Bookmark
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     CircleAvatar(
-                      radius: 24,
-                      backgroundColor:
-                          secondaryAccent, // Accent color for logo background
+                      radius: Responsive.isSmall(context) ? 20 : 24,
+                      backgroundColor: secondaryAccent,
                       child: Text(
                         job.logoText,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: textLightColor,
                           fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                          fontSize: Responsive.fontSize(context, 18),
                         ),
                       ),
                     ),
                     GestureDetector(
-                      onTap: onSaveTap ?? () => {},
+                      onTap: onSaveTap ?? () {},
                       child: Icon(
                         job.isSaved
                             ? Icons.bookmark_rounded
                             : Icons.bookmark_border_rounded,
                         color: job.isSaved ? accentNeon : Colors.grey.shade600,
-                        size: 28,
+                        size: Responsive.isSmall(context) ? 24 : 28,
                       ),
                     ),
                   ],
@@ -444,16 +497,19 @@ class _FeaturedJobCard extends StatelessWidget {
                   job.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: textLightColor,
                     fontWeight: FontWeight.w700,
-                    fontSize: 22,
+                    fontSize: Responsive.fontSize(context, 20),
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '${job.company} • ${job.location}',
-                  style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+                  style: TextStyle(
+                    color: Colors.grey.shade400,
+                    fontSize: Responsive.fontSize(context, 13),
+                  ),
                 ),
                 const SizedBox(height: 15),
                 Row(
@@ -461,10 +517,10 @@ class _FeaturedJobCard extends StatelessWidget {
                   children: [
                     Text(
                       job.salary,
-                      style: const TextStyle(
-                        color: accentNeon, // Highlight salary in neon
+                      style: TextStyle(
+                        color: accentNeon,
                         fontWeight: FontWeight.w700,
-                        fontSize: 16,
+                        fontSize: Responsive.fontSize(context, 15),
                       ),
                     ),
                     Container(

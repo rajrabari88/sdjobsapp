@@ -1,6 +1,7 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../models/job.dart';
 import '../services/job_service.dart';
 import '../services/saved_job_service.dart';
@@ -8,17 +9,13 @@ import '../widgets/job_application_modal.dart';
 import '../widgets/custom_appbar.dart';
 import '../widgets/search_bar.dart';
 import '../widgets/job_card.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/responsive.dart';
 
-// --- DARK THEME CONSTANTS (Consistency is key!) ---
-const Color primaryDarkColor = Color(
-  0xFF0D0D12,
-); // Deep Navy/Near Black Background
-const Color accentNeon = Color(0xFF00FFFF); // Neon Cyan/Blue for highlights
-const Color secondaryAccent = Color(
-  0xFF4A64FE,
-); // Subtle Purple-Blue for contrast
-const Color cardDarkColor = Color(0xFF1B1B25); // Card Background
+// --- DARK THEME CONSTANTS ---
+const Color primaryDarkColor = Color(0xFF0D0D12);
+const Color accentNeon = Color(0xFF00FFFF);
+const Color secondaryAccent = Color(0xFF4A64FE);
+const Color cardDarkColor = Color(0xFF1B1B25);
 const Color textLightColor = Colors.white;
 
 class SearchScreen extends StatefulWidget {
@@ -32,9 +29,9 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _controller = TextEditingController();
   final List<Job> _allJobs = [];
-  Map<String, dynamic>? userData;
 
-  final List<String> _popularCategories = const [
+  Map<String, dynamic>? userData;
+  List<String> _popularCategories = const [
     'Flutter',
     'Manager',
     'Design',
@@ -45,8 +42,8 @@ class _SearchScreenState extends State<SearchScreen> {
   ];
 
   List<String> _recentSearches = [];
-
   List<Job> _filteredJobs = [];
+
   bool _loading = false;
   Timer? _debounce;
 
@@ -56,15 +53,10 @@ class _SearchScreenState extends State<SearchScreen> {
     _filteredJobs = List.from(_allJobs);
     _controller.addListener(_onSearchChanged);
     _loadRecentSearches();
-    JobService.fetchProfileData(widget.userId)
-        .then((data) {
-          setState(() {
-            userData = data['user'];
-          });
-        })
-        .catchError((e) {
-          debugPrint('Failed to load profile in SearchScreen: $e');
-        });
+
+    JobService.fetchProfileData(widget.userId).then((data) {
+      setState(() => userData = data['user']);
+    });
   }
 
   @override
@@ -87,7 +79,7 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    _debounce = Timer(const Duration(milliseconds: 400), () {
+    _debounce = Timer(const Duration(milliseconds: 350), () {
       _performSearch(query);
     });
   }
@@ -101,12 +93,9 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Future<void> _saveRecentSearch(String query) async {
     final prefs = await SharedPreferences.getInstance();
-
-    // Duplicate remove & latest item upar add
     _recentSearches.remove(query);
     _recentSearches.insert(0, query);
 
-    // Sirf last 10 searches store karna
     if (_recentSearches.length > 10) {
       _recentSearches = _recentSearches.sublist(0, 10);
     }
@@ -115,24 +104,14 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _performSearch(String query) async {
-    setState(() {
-      _loading = true;
-    });
-
-    // 🔥 ADD THIS — Save search history dynamically
+    setState(() => _loading = true);
     await _saveRecentSearch(query);
 
     try {
       final results = await JobService.searchJobs(query, widget.userId);
-
-      setState(() {
-        _filteredJobs = results;
-      });
+      setState(() => _filteredJobs = results);
     } catch (e) {
-      debugPrint('Search error: $e');
-      setState(() {
-        _filteredJobs = [];
-      });
+      setState(() => _filteredJobs = []);
     } finally {
       setState(() => _loading = false);
     }
@@ -144,12 +123,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   void _showJobApplicationModal(Job job) {
-    if (userData == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('User data not loaded.')));
-      return;
-    }
+    if (userData == null) return;
 
     showModalBottomSheet(
       context: context,
@@ -160,116 +134,115 @@ class _SearchScreenState extends State<SearchScreen> {
         userData: userData!,
         userId: widget.userId,
       ),
-    ).then((result) {
-      if (result == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Application submitted successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    });
+    );
   }
 
   void _toggleSave(Job job) {
-    final previous = job.isSaved;
+    final prev = job.isSaved;
     setState(() => job.isSaved = !job.isSaved);
 
     if (job.isSaved) {
       SavedJobService.addSaved(widget.userId, job.id).then((ok) {
-        if (!ok) {
-          setState(() => job.isSaved = previous);
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Failed to save job.')));
-        }
+        if (!ok) setState(() => job.isSaved = prev);
       });
     } else {
       SavedJobService.removeSaved(widget.userId, job.id).then((ok) {
-        if (!ok) {
-          setState(() => job.isSaved = previous);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to remove saved job.')),
-          );
-        }
+        if (!ok) setState(() => job.isSaved = prev);
       });
     }
   }
 
-  // --- BUILD METHOD (DESIGN CHANGES APPLIED) ---
+  // ---------------- UI ----------------
+
   @override
   Widget build(BuildContext context) {
+    final isWide = Responsive.isLarge(context);
+    final padding = Responsive.contentPadding(context);
+
     Widget bodyContent;
     if (_controller.text.isEmpty) {
-      bodyContent = _buildInitialSearchBody();
+      bodyContent = _buildInitialUI();
     } else if (_loading) {
-      // Dark Theme Loading
       bodyContent = Center(child: CircularProgressIndicator(color: accentNeon));
     } else {
-      bodyContent = _buildSearchResultsBody();
+      bodyContent = _buildSearchResults();
     }
 
     return Scaffold(
-      backgroundColor: primaryDarkColor, // Dark Background
-      appBar: const CustomAppBar(
-        title: 'Find Your Job',
-        // Assuming CustomAppBar adapts title color to white
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: CustomSearchBar(
+      backgroundColor: primaryDarkColor,
+      appBar: const CustomAppBar(title: "Find Your Job"),
+      body: Padding(
+        padding: padding,
+        child: Column(
+          children: [
+            SizedBox(height: 12),
+            CustomSearchBar(
               controller: _controller,
-              hint: 'Search jobs by title, company, or skill...',
-              // Assuming CustomSearchBar is styled for dark theme
+              hint: "Search jobs, company, skills...",
               onChanged: (_) {},
-              onFilterTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  // Neon SnackBar
-                  SnackBar(
-                    content: Text(
-                      'Opening advanced filters...',
-                      style: TextStyle(color: primaryDarkColor),
-                    ),
-                    backgroundColor: const Color.fromARGB(255, 158, 194, 110),
-                  ),
-                );
-              },
+              onFilterTap: () {},
             ),
-          ),
-          Expanded(child: bodyContent),
-        ],
+            const SizedBox(height: 10),
+
+            // FOLDABLE SUPPORT: 2-COLUMN LAYOUT
+            Expanded(
+              child: isWide
+                  ? AdaptiveTwoColumn(
+                      left: bodyContent,
+                      right: _buildSuggestionsSidebar(),
+                    )
+                  : bodyContent,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // --- INITIAL SEARCH BODY (CATEGORIES & RECENT) ---
-  Widget _buildInitialSearchBody() {
+  // LEFT SIDE for foldable (main content)
+  Widget _buildInitialUI() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle('Popular Categories 🚀'),
-          const SizedBox(height: 15),
+          _buildSectionTitle("Popular Categories 🚀"),
+          const SizedBox(height: 10),
           _buildCategoryChips(),
           const SizedBox(height: 30),
-          _buildSectionTitle('Recent Searches'),
+          _buildSectionTitle("Recent Searches"),
           _buildRecentSearchesList(),
         ],
       ),
     );
   }
 
+  // RIGHT SIDE for foldable (extra suggestions)
+  Widget _buildSuggestionsSidebar() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle("Top Picks For You"),
+        const SizedBox(height: 12),
+        _filteredJobs.isNotEmpty
+            ? Text(
+                "Showing ${_filteredJobs.length} matches",
+                style: TextStyle(color: Colors.grey.shade400),
+              )
+            : const Text(
+                "Try searching for a role...",
+                style: TextStyle(color: Colors.grey),
+              ),
+      ],
+    );
+  }
+
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(
-        fontSize: 18,
+      style: TextStyle(
+        fontSize: Responsive.fontSize(context, 18),
+        color: textLightColor,
         fontWeight: FontWeight.w600,
-        color: textLightColor, // White text
       ),
     );
   }
@@ -278,92 +251,83 @@ class _SearchScreenState extends State<SearchScreen> {
     return Wrap(
       spacing: 10,
       runSpacing: 10,
-      children: _popularCategories
-          .map(
-            (category) => ActionChip(
-              label: Text(category),
-              // Neon icon
-              avatar: Icon(Icons.flash_on_rounded, size: 16, color: accentNeon),
-              onPressed: () => _handleCategoryTap(category),
-              // Subtle dark background with accent border
-              backgroundColor: secondaryAccent.withOpacity(0.15),
-              side: BorderSide(
-                color: secondaryAccent.withOpacity(0.5),
-                width: 1,
-              ),
-              labelStyle: const TextStyle(
-                color: textLightColor, // Light text color
-                fontWeight: FontWeight.w500,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
+      children: _popularCategories.map((category) {
+        return ActionChip(
+          label: Text(
+            category,
+            style: TextStyle(
+              fontSize: Responsive.fontSize(context, 14),
+              color: textLightColor,
             ),
-          )
-          .toList(),
+          ),
+          avatar: Icon(
+            Icons.flash_on_rounded,
+            size: Responsive.isLarge(context) ? 20 : 16,
+            color: accentNeon,
+          ),
+          onPressed: () => _handleCategoryTap(category),
+          backgroundColor: secondaryAccent.withOpacity(0.15),
+          side: BorderSide(color: secondaryAccent.withOpacity(0.5), width: 1),
+        );
+      }).toList(),
     );
   }
 
   Widget _buildRecentSearchesList() {
     return Column(
-      children: _recentSearches
-          .map(
-            (search) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4.0),
-              child: Material(
-                color: cardDarkColor, // Dark card material
-                borderRadius: BorderRadius.circular(12),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => _handleCategoryTap(search),
-                  child: ListTile(
-                    leading: Icon(Icons.history, color: Colors.grey.shade600),
-                    title: Text(
-                      search,
-                      style: const TextStyle(
-                        color: textLightColor, // Light text
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    trailing: Icon(
-                      Icons.north_west_rounded, // Modern, neon icon
-                      size: 20,
-                      color: accentNeon,
-                    ),
+      children: _recentSearches.map((search) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Material(
+            color: cardDarkColor,
+            borderRadius: BorderRadius.circular(12),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => _handleCategoryTap(search),
+              child: ListTile(
+                leading: Icon(
+                  Icons.history,
+                  color: Colors.grey.shade500,
+                  size: Responsive.isLarge(context) ? 26 : 22,
+                ),
+                title: Text(
+                  search,
+                  style: TextStyle(
+                    fontSize: Responsive.fontSize(context, 14),
+                    color: textLightColor,
                   ),
+                ),
+                trailing: Icon(
+                  Icons.north_west_rounded,
+                  color: accentNeon,
+                  size: Responsive.isLarge(context) ? 24 : 20,
                 ),
               ),
             ),
-          )
-          .toList(),
+          ),
+        );
+      }).toList(),
     );
   }
 
-  // --- SEARCH RESULTS BODY ---
-  Widget _buildSearchResultsBody() {
+  Widget _buildSearchResults() {
     if (_filteredJobs.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.sentiment_dissatisfied_rounded,
-              size: 80,
-              color: secondaryAccent.withOpacity(0.5), // Soft accent color
+              Icons.sentiment_dissatisfied,
+              size: Responsive.isLarge(context) ? 120 : 80,
+              color: secondaryAccent.withOpacity(0.4),
             ),
-            const SizedBox(height: 15),
-            const Text(
-              'No results found',
+            const SizedBox(height: 10),
+            Text(
+              "No results found",
               style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
+                fontSize: Responsive.fontSize(context, 20),
                 color: textLightColor,
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Try a different keyword or check your spelling.',
-              style: TextStyle(color: Colors.grey.shade500),
             ),
           ],
         ),
@@ -371,10 +335,11 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       itemCount: _filteredJobs.length,
+      padding: const EdgeInsets.only(bottom: 10),
       itemBuilder: (context, index) {
-        final Job job = _filteredJobs[index];
+        final job = _filteredJobs[index];
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: JobCard(

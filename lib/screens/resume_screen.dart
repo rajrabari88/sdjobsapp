@@ -1,27 +1,107 @@
 // resume_screen.dart
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 
 // --- Theme Constants ---
-const String baseUrl = 'http://192.168.1.194/sdjobs/api/';
 const Color primaryDarkColor = Color(0xFF0D0D12); // Deep dark background
 const Color accentNeon = Color(0xFF00FFFF); // Neon Cyan for accents
 const Color primaryTextColor = Colors.white;
-const Color secondaryTextColor = Color(
-  0xFFAAAAAA,
-); // Light Grey for subtle text
+const Color secondaryTextColor = Color(0xFFAAAAAA); // Light Grey
 const Color cardDarkColor = Color(
   0xFF1B1B25,
 ); // Slightly lighter card background
 const Color subtleGrey = Color(0xFF424242);
-const Color fileIconColor = Color(
-  0xFFE53935,
-); // Not used in new design, replaced with accentNeon
+
+// --- Service ---
+class ResumeService {
+  static const String baseUrl = "http://192.168.1.4/sdjobs/api";
+  static const String staticToken = "9313069472"; // 🔑 Static token
+
+  static Map<String, String> get headers => {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer $staticToken",
+  };
+
+  static Future<List> getUserDocuments(String userId) async {
+    final response = await http.get(
+      Uri.parse("$baseUrl/get_documents.php?user_id=$userId"),
+      headers: headers,
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception("Failed to fetch documents");
+    }
+
+    final data = jsonDecode(response.body);
+    return data["documents"] ?? [];
+  }
+
+  static Future<bool> uploadDocument(
+    String userId,
+    String fileName,
+    Uint8List fileBytes,
+  ) async {
+    var request = http.MultipartRequest(
+      "POST",
+      Uri.parse("$baseUrl/upload_document.php"),
+    );
+
+    request.headers["Authorization"] = "Bearer $staticToken";
+    request.fields["user_id"] = userId;
+    request.files.add(
+      http.MultipartFile.fromBytes("file", fileBytes, filename: fileName),
+    );
+
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
+
+    if (response.statusCode != 200) {
+      print("Upload Document Error: ${response.statusCode} - ${response.body}");
+      return false;
+    }
+
+    final result = jsonDecode(response.body);
+    return result["status"] == "success";
+  }
+
+  static Future<bool> deleteDocument(String docId) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/delete_document.php"),
+      headers: headers,
+      body: jsonEncode({"doc_id": docId}),
+    );
+
+    if (response.statusCode != 200) {
+      print("Delete Document Error: ${response.statusCode} - ${response.body}");
+      return false;
+    }
+
+    final result = jsonDecode(response.body);
+    return result["status"] == "success";
+  }
+
+  static Future<bool> setPrimary(String docId, String userId) async {
+    final response = await http.post(
+      Uri.parse("$baseUrl/set_primary.php"),
+      headers: headers,
+      body: jsonEncode({"id": docId, "user_id": userId}),
+    );
+
+    if (response.statusCode != 200) {
+      print("Set Primary Error: ${response.statusCode} - ${response.body}");
+      return false;
+    }
+
+    final result = jsonDecode(response.body);
+    return result["status"] == "success";
+  }
+}
 
 // --- Main Screen Widget ---
 class ResumeScreen extends StatefulWidget {
@@ -33,7 +113,6 @@ class ResumeScreen extends StatefulWidget {
 }
 
 class _ResumeScreenState extends State<ResumeScreen> {
-  // List to hold uploaded documents. Structure: [{"id": 1, "file_name": "...", "file_url": "...", "is_primary": "1"}, ...]
   List<Map<String, dynamic>> uploadedDocs = [];
   bool loading = false;
   bool uploading = false;
@@ -44,46 +123,23 @@ class _ResumeScreenState extends State<ResumeScreen> {
     fetchDocuments();
   }
 
-  // --- API Calls & Logic ---
-
   Future<void> fetchDocuments() async {
     setState(() => loading = true);
-    uploadedDocs.clear(); // Clear existing list before fetching
-
     try {
-      final uri = Uri.parse(
-        '$baseUrl/get_documents.php?user_id=${widget.userId}',
+      final docs = await ResumeService.getUserDocuments(widget.userId);
+      uploadedDocs = List<Map<String, dynamic>>.from(docs);
+      uploadedDocs.sort(
+        (a, b) =>
+            b["is_primary"].toString().compareTo(a["is_primary"].toString()),
       );
-      final resp = await http.get(uri);
-
-      if (resp.statusCode == 200) {
-        final data = jsonDecode(resp.body);
-
-        if (data != null && data["documents"] is List) {
-          // Sort documents: Primary document comes first
-          List<Map<String, dynamic>> fetchedList =
-              List<Map<String, dynamic>>.from(data["documents"]);
-
-          fetchedList.sort((a, b) {
-            // "1" (primary) should be before "0" (not primary)
-            return b["is_primary"].toString().compareTo(
-              a["is_primary"].toString(),
-            );
-          });
-
-          uploadedDocs = fetchedList;
-        }
-      }
     } catch (e) {
       print("❌ Error fetching documents: $e");
-      // Show error to user
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("❌ Failed to load documents.")),
         );
       }
     }
-
     setState(() => loading = false);
   }
 
@@ -91,16 +147,12 @@ class _ResumeScreenState extends State<ResumeScreen> {
     final result = await FilePicker.platform.pickFiles(
       withData: true,
       type: FileType.custom,
-      allowedExtensions: ['pdf', 'doc', 'docx'], // Restrict file types
+      allowedExtensions: ['pdf', 'doc', 'docx'],
     );
 
     if (result == null) return;
-
     final file = result.files.first;
-    final fileName = file.name;
-    final fileBytes = file.bytes;
-
-    if (fileBytes == null) {
+    if (file.bytes == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("❌ File content not available.")),
       );
@@ -108,55 +160,24 @@ class _ResumeScreenState extends State<ResumeScreen> {
     }
 
     setState(() => uploading = true);
-
-    var request = http.MultipartRequest(
-      "POST",
-      Uri.parse("${baseUrl}upload_document.php"),
+    final success = await ResumeService.uploadDocument(
+      widget.userId,
+      file.name,
+      file.bytes!,
     );
 
-    request.fields["user_id"] = widget.userId;
-    request.files.add(
-      http.MultipartFile.fromBytes("file", fileBytes, filename: fileName),
-    );
-
-    try {
-      var response = await request.send();
-      if (response.statusCode == 200) {
-        // Read response body for success message/error details if needed
-        final respBody = await response.stream.bytesToString();
-        final respData = jsonDecode(respBody);
-
-        if (respData['status'] == 'success') {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text("✅ Upload Successful")));
-          fetchDocuments();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                "❌ Upload Failed: ${respData['message'] ?? 'Unknown error'}",
-              ),
-            ),
-          );
-        }
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              "❌ Upload Failed. Server returned code ${response.statusCode}",
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      print("❌ Upload error: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("❌ Upload Failed. Check connection.")),
-      );
-    } finally {
-      setState(() => uploading = false);
+    if (success) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("✅ Upload Successful")));
+      fetchDocuments();
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("❌ Upload Failed")));
     }
+
+    setState(() => uploading = false);
   }
 
   Future<void> downloadAndOpen(String fileUrl, String filename) async {
@@ -167,15 +188,10 @@ class _ResumeScreenState extends State<ResumeScreen> {
       final response = await http.get(Uri.parse(fileUrl));
       if (response.statusCode == 200) {
         final bytes = response.bodyBytes;
-
-        // Use getApplicationDocumentsDirectory for persistent storage if needed,
-        // but getTemporaryDirectory is fine for quick view.
         final dir = await getTemporaryDirectory();
         final file = File('${dir.path}/$filename');
         await file.writeAsBytes(bytes, flush: true);
-
         final openResult = await OpenFilex.open(file.path);
-
         if (openResult.type != ResultType.done) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -184,9 +200,9 @@ class _ResumeScreenState extends State<ResumeScreen> {
           );
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Download Failed. File not found.")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Download Failed.")));
       }
     } catch (e) {
       print("❌ Download error: $e");
@@ -196,12 +212,9 @@ class _ResumeScreenState extends State<ResumeScreen> {
     }
   }
 
-  Future<void> deleteFile(String id, String fileUrl) async {
-    final resp = await http.post(
-      Uri.parse("${baseUrl}delete_document.php"),
-      body: {"id": id, "file_url": fileUrl},
-    );
-    if (resp.statusCode == 200) {
+  Future<void> deleteFile(String docId) async {
+    final success = await ResumeService.deleteDocument(docId);
+    if (success) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("🗑️ Document Deleted")));
@@ -213,12 +226,9 @@ class _ResumeScreenState extends State<ResumeScreen> {
     }
   }
 
-  Future<void> setPrimary(String id) async {
-    final resp = await http.post(
-      Uri.parse("${baseUrl}set_primary.php"),
-      body: {"id": id, "user_id": widget.userId},
-    );
-    if (resp.statusCode == 200) {
+  Future<void> setPrimary(String docId) async {
+    final success = await ResumeService.setPrimary(docId, widget.userId);
+    if (success) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text("⭐ Primary Resume Set")));
@@ -229,8 +239,6 @@ class _ResumeScreenState extends State<ResumeScreen> {
       ).showSnackBar(const SnackBar(content: Text("❌ Failed to Set Primary")));
     }
   }
-
-  // --- UI Components ---
 
   Widget buildUploadCard() {
     return InkWell(
@@ -338,7 +346,6 @@ class _ResumeScreenState extends State<ResumeScreen> {
                   "Tap to view options",
                   style: TextStyle(color: subtleGrey),
                 ),
-
           trailing: PopupMenuButton<int>(
             color: cardDarkColor,
             icon: Icon(
@@ -348,7 +355,7 @@ class _ResumeScreenState extends State<ResumeScreen> {
             onSelected: (v) {
               if (v == 1) downloadAndOpen(doc["file_url"], fileName);
               if (v == 2) setPrimary(doc["id"].toString());
-              if (v == 3) deleteFile(doc["id"].toString(), doc["file_url"]);
+              if (v == 3) deleteFile(doc["id"].toString());
             },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<int>>[
               const PopupMenuItem<int>(
@@ -358,7 +365,7 @@ class _ResumeScreenState extends State<ResumeScreen> {
                   style: TextStyle(color: primaryTextColor),
                 ),
               ),
-              if (!isPrimary) // Option to set primary only if it's not already primary
+              if (!isPrimary)
                 const PopupMenuItem<int>(
                   value: 2,
                   child: Text(
@@ -366,8 +373,7 @@ class _ResumeScreenState extends State<ResumeScreen> {
                     style: TextStyle(color: accentNeon),
                   ),
                 ),
-              if (uploadedDocs.length > 1 ||
-                  !isPrimary) // Prevent deleting the last primary document if only one exists (Optional guardrail)
+              if (uploadedDocs.length > 1 || !isPrimary)
                 const PopupMenuItem<int>(
                   value: 3,
                   child: Text(
@@ -397,7 +403,6 @@ class _ResumeScreenState extends State<ResumeScreen> {
         backgroundColor: primaryDarkColor,
         elevation: 0,
         leading: const BackButton(color: primaryTextColor),
-        // Adding a subtle border at the bottom of the AppBar for definition
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
           child: Container(color: subtleGrey.withOpacity(0.5), height: 1.0),
@@ -408,14 +413,10 @@ class _ResumeScreenState extends State<ResumeScreen> {
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment
-                    .start, // Keep this as start for text alignment
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // --- Upload Card Section (Now Centered) ---
                   Center(child: buildUploadCard()),
                   const SizedBox(height: 40),
-
-                  // --- Documents List Section ---
                   Text(
                     "Your Uploaded Documents (${uploadedDocs.length})",
                     style: TextStyle(
@@ -425,8 +426,6 @@ class _ResumeScreenState extends State<ResumeScreen> {
                     ),
                   ),
                   const SizedBox(height: 15),
-
-                  // --- Documents List ---
                   uploadedDocs.isEmpty
                       ? Center(
                           child: Padding(

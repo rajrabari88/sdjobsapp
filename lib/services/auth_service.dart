@@ -2,7 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  static const String baseUrl = "http://192.168.1.194/sdjobs/api";
+  static const String baseUrl = "http://192.168.1.4/sdjobs/api";
+  static const String staticToken = "9313069472"; // 🔒 Static token
 
   static Future<Map<String, dynamic>> login(
     String email,
@@ -13,7 +14,10 @@ class AuthService {
     try {
       final response = await http.post(
         url,
-        headers: {"Content-Type": "application/json"},
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $staticToken", // 🔑 Add token here
+        },
         body: jsonEncode({"email": email.trim(), "password": password.trim()}),
       );
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/responsive.dart';
 
 // --- DARK THEME CONSTANTS ---
 const Color primaryDarkColor = Color(0xFF0D0D12);
@@ -45,13 +46,12 @@ class JobCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
-
-    double titleSize = width < 360 ? 16 : 18;
-    double subtitleSize = width < 360 ? 12 : 14;
-    double smallTextSize = width < 360 ? 11 : 13;
-    double logoSize = width < 360 ? 15 : 18;
-    double paddingSize = width < 360 ? 14 : 18;
+    bool small = Responsive.isSmall(context);
+    double titleSize = Responsive.fontSize(context, small ? 16 : 18);
+    double subtitleSize = Responsive.fontSize(context, small ? 12 : 14);
+    double smallTextSize = Responsive.fontSize(context, small ? 11 : 13);
+    double logoSize = small ? 15 : 18;
+    double paddingSize = small ? 12 : 16;
 
     Color typeColor;
     switch (type.toLowerCase()) {
@@ -142,13 +142,13 @@ class JobCard extends StatelessWidget {
                         ? Icons.bookmark_rounded
                         : Icons.bookmark_border_rounded,
                     color: isSaved ? accentNeon : Colors.grey.shade600,
-                    size: width < 360 ? 22 : 26,
+                    size: small ? 22 : 26,
                   ),
                 ),
               ],
             ),
 
-            const SizedBox(height: 15),
+            SizedBox(height: small ? 12 : 15),
 
             // CHIPS
             Wrap(
@@ -160,16 +160,16 @@ class JobCard extends StatelessWidget {
               ],
             ),
 
-            const SizedBox(height: 15),
+            SizedBox(height: small ? 12 : 15),
 
             Row(
               children: [
                 Icon(
                   Icons.location_on_rounded,
-                  size: 16,
+                  size: Responsive.fontSize(context, 14),
                   color: Colors.grey.shade500,
                 ),
-                const SizedBox(width: 5),
+                const SizedBox(width: 6),
                 Flexible(
                   child: Text(
                     location,
@@ -185,10 +185,10 @@ class JobCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 Icon(
                   Icons.work_history_rounded,
-                  size: 16,
+                  size: Responsive.fontSize(context, 14),
                   color: Colors.grey.shade500,
                 ),
-                const SizedBox(width: 5),
+                const SizedBox(width: 6),
                 Text(
                   experience,
                   style: TextStyle(
@@ -213,7 +213,7 @@ class JobCard extends StatelessWidget {
             /// ⭐ APPLY BUTTON (Disable if already applied)
             SizedBox(
               width: double.infinity,
-              height: 44,
+              height: Responsive.isSmall(context) ? 44 : 48,
               child: TextButton(
                 onPressed: isApplied ? null : onApply, // ⭐ Disabled here
                 style: TextButton.styleFrom(

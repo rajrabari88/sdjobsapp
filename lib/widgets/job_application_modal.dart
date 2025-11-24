@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/job.dart';
 import '../services/job_service.dart';
+import 'package:lottie/lottie.dart';
 
 const Color primaryDarkColor = Color(0xFF0D0D12);
 const Color accentNeon = Color(0xFF00FFFF);
@@ -111,13 +112,7 @@ class _JobApplicationModalState extends State<JobApplicationModal> {
       if (!mounted) return;
 
       if (response == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Application submitted successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context, true);
+        showSuccessPopup(context);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -591,5 +586,63 @@ class _JobApplicationModalState extends State<JobApplicationModal> {
         ),
       ],
     );
+  }
+
+  void showSuccessPopup(BuildContext context) {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.6),
+      barrierDismissible: false,
+      builder: (_) {
+        return Center(
+          child: Container(
+            width: 260,
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: cardDarkColor,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: accentNeon.withOpacity(0.6),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: accentNeon.withOpacity(0.4),
+                  blurRadius: 25,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Lottie.asset(
+                  'assets/success.json',
+                  width: 180,
+                  height: 180,
+                  fit: BoxFit.contain,
+                  repeat: false,
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  "Application Submitted",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: textLightColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    Future.delayed(const Duration(seconds: 3), () {
+      Navigator.pop(context); // close popup
+      Navigator.pop(context, true); // close bottom sheet
+    });
   }
 }

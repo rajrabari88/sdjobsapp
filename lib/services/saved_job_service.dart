@@ -1,56 +1,69 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
-const String baseUrl = "http://192.168.1.194/sdjobs/api";
+const String baseUrl = "http://192.168.1.4/sdjobs/api";
+const String staticToken = "9313069472"; // 🔑 Static token
 
 class SavedJobService {
+  static Map<String, String> get headers => {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer $staticToken",
+  };
+
+  // 🟢 Get saved jobs for a user
   static Future<List<dynamic>> getSavedJobs(String userId) async {
     final url = Uri.parse("$baseUrl/get_saved_jobs.php?user_id=$userId");
-    final response = await http.get(url);
-    return jsonDecode(response.body);
+    final response = await http.get(url, headers: headers);
+
+    if (response.statusCode != 200) {
+      throw Exception("Failed to fetch saved jobs");
+    }
+
+    final data = jsonDecode(response.body);
+    return data["jobs"] ?? []; // Assuming API returns {"jobs": [...]}
   }
 
+  // 🗑 Remove saved job
   static Future<bool> removeSaved(String userId, String jobId) async {
     final url = Uri.parse("$baseUrl/remove_saved_job.php");
 
     final response = await http.post(
       url,
-      headers: {"Content-Type": "application/json"},
+      headers: headers,
       body: jsonEncode({"user_id": userId, "job_id": jobId}),
     );
 
-    print("REMOVE RESPONSE: ${response.body}");
+    if (response.statusCode != 200) return false;
 
-    return jsonDecode(response.body)["status"] == "success";
+    final data = jsonDecode(response.body);
+    return data["status"] == "success";
   }
 
-  // Add/save a job for a user
+  // ➕ Add/save a job
   static Future<bool> addSaved(String userId, String jobId) async {
     final url = Uri.parse("$baseUrl/add_saved_job.php");
+
     final response = await http.post(
       url,
-      body: {"user_id": userId, "job_id": jobId},
+      headers: headers,
+      body: jsonEncode({"user_id": userId, "job_id": jobId}),
     );
 
     if (response.statusCode != 200) return false;
-    try {
-      final data = jsonDecode(response.body);
-      return data["status"] == "saved" || data["status"] == "success";
-    } catch (_) {
-      return false;
-    }
+
+    final data = jsonDecode(response.body);
+    return data["status"] == "saved" || data["status"] == "success";
   }
 
+  // ✅ Apply to a job
   static Future<bool> applyJob(String userId, String jobId) async {
     final url = Uri.parse("$baseUrl/apply_job.php");
 
     final response = await http.post(
       url,
-      headers: {"Content-Type": "application/json"},
+      headers: headers,
       body: jsonEncode({"user_id": userId, "job_id": jobId}),
     );
-
-    print("APPLY RESPONSE: ${response.body}");
 
     if (response.statusCode != 200) return false;
 

@@ -4,11 +4,18 @@ import 'package:http/http.dart' as http;
 import '../models/job.dart';
 
 class JobService {
-  static const String baseUrl = "http://192.168.1.194/sdjobs/api";
+  static const String baseUrl = "http://192.168.1.4/sdjobs/api";
+  static const String staticToken = "9313069472"; // 🔑 Static token
+
+  static Map<String, String> get headers => {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer $staticToken",
+  };
 
   static Future<Map<String, dynamic>> fetchHomeData(String userId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/home_data.php?user_id=$userId'),
+      headers: headers,
     );
 
     if (response.statusCode != 200) {
@@ -21,7 +28,6 @@ class JobService {
       throw Exception("API returned error");
     }
 
-    // ✅ Parse Featured Jobs List
     List<Job> featuredJobs = [];
     if (data['featured_jobs'] != null) {
       featuredJobs = (data['featured_jobs'] as List)
@@ -29,7 +35,6 @@ class JobService {
           .toList();
     }
 
-    // ✅ Parse Recent Jobs
     List<Job> recentJobs = [];
     if (data['recent_jobs'] != null) {
       recentJobs = (data['recent_jobs'] as List)
@@ -45,7 +50,6 @@ class JobService {
     };
   }
 
-  // 🔍 Search Jobs
   static Future<List<Job>> searchJobs(String query, String userId) async {
     if (query.trim().isEmpty) return [];
 
@@ -53,16 +57,13 @@ class JobService {
       '$baseUrl/search_jobs.php?q=${Uri.encodeQueryComponent(query)}&user_id=$userId',
     );
 
-    final response = await http.get(url);
+    final response = await http.get(url, headers: headers);
 
     if (response.statusCode != 200) {
       throw Exception("Search failed");
     }
 
     final data = json.decode(response.body);
-
-    // API format:
-    // { status: success, results: [...] }
 
     if (data is Map && data["results"] is List) {
       return (data["results"] as List)
@@ -76,6 +77,7 @@ class JobService {
   static Future<Map<String, dynamic>> fetchProfileData(String userId) async {
     final response = await http.get(
       Uri.parse('$baseUrl/profile_data.php?user_id=$userId'),
+      headers: headers,
     );
 
     if (response.statusCode != 200) {
@@ -102,11 +104,10 @@ class JobService {
     File? resume,
   ) async {
     try {
-      final url = Uri.parse(
-        "http://192.168.1.194/sdjobs/api/profile_update.php",
-      );
+      final url = Uri.parse("$baseUrl/profile_update.php");
 
       var request = http.MultipartRequest("POST", url);
+      request.headers.addAll({"Authorization": "Bearer $staticToken"});
 
       data.forEach((key, value) {
         request.fields[key] = value.toString();
@@ -128,7 +129,6 @@ class JobService {
       var response = await http.Response.fromStream(streamedResponse);
 
       final result = json.decode(response.body);
-
       return result["status"] == "success";
     } catch (e) {
       print("Profile Update Error: $e");
@@ -136,7 +136,6 @@ class JobService {
     }
   }
 
-  // 💼 SUBMIT JOB APPLICATION (Send to PHP Backend)
   static Future<bool> submitJobApplication({
     required String userId,
     required String jobId,
@@ -150,7 +149,8 @@ class JobService {
     try {
       final response = await http.post(
         Uri.parse('$baseUrl/submit_application.php'),
-        body: {
+        headers: headers,
+        body: jsonEncode({
           'user_id': userId.toString(),
           'job_id': jobId.toString(),
           'name': name.toString(),
@@ -159,7 +159,7 @@ class JobService {
           'cover_letter': coverLetter.toString(),
           'experience': experience.toString(),
           'additional_notes': additionalNotes.toString(),
-        },
+        }),
       );
 
       if (response.statusCode != 200) {

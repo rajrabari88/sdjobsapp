@@ -1,29 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../utils/responsive.dart';
+import '../screens/support_chat_screen.dart';
 
-// --- DARK THEME CONSTANTS ---
 const Color accentNeon = Color(0xFF00FFFF);
 const Color textLightColor = Colors.white;
-const Color appBarBgColor = Colors.transparent; // Transparent for modern look
 
 class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   final bool showBackButton;
   final String? title;
+  final bool hasUnread; // <-- NEW
 
-  const CustomAppBar({super.key, this.showBackButton = false, this.title});
+  const CustomAppBar({
+    super.key,
+    this.showBackButton = false,
+    this.title,
+    this.hasUnread = false,
+  });
 
-  // SDJOBS Header - Bolder, Larger, and Modern Look
-  Widget _buildLogo() {
+  // Logo
+  Widget _buildLogo(BuildContext context) {
+    final baseSize = Responsive.fontSize(context, 28);
     return Padding(
-      padding: const EdgeInsets.only(left: 4.0), // थोड़ा बाएँ पैडिंग
+      padding: const EdgeInsets.only(left: 4.0),
       child: RichText(
         text: TextSpan(
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Poppins',
-            fontWeight: FontWeight
-                .w800, // Slightly less bold than w900 for a cleaner look
-            fontSize: 32, // 🔥 SDJobs को बड़ा कर दिया
-            letterSpacing: 0.8, // थोड़ा ज़्यादा स्पेसिंग
-            height: 1.0, // Line height
+            fontWeight: FontWeight.w800,
+            fontSize: baseSize,
+            letterSpacing: 0.8,
+            height: 1.0,
           ),
           children: [
             TextSpan(
@@ -31,16 +38,11 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
               style: TextStyle(
                 color: accentNeon,
                 shadows: [
-                  // Neon Glow Effect
-                  Shadow(
-                    color: accentNeon.withOpacity(0.5),
-                    blurRadius: 10.0,
-                    offset: const Offset(0, 0),
-                  ),
+                  Shadow(color: accentNeon.withOpacity(0.5), blurRadius: 10.0),
                 ],
               ),
             ),
-            TextSpan(
+            const TextSpan(
               text: 'Jobs',
               style: TextStyle(color: textLightColor),
             ),
@@ -53,37 +55,81 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
   @override
   Widget build(BuildContext context) {
     return AppBar(
-      backgroundColor: appBarBgColor, // Transparent
-      elevation: 0, // No shadow for a flat, modern design
-      centerTitle: false, // Title aligned to the start
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      centerTitle: false,
       automaticallyImplyLeading: false,
 
       leading: showBackButton
           ? IconButton(
               icon: Icon(
                 Icons.arrow_back_ios_new_rounded,
-                color: accentNeon, // Neon color for back button
-                size: 26, // Bigger icon
+                color: accentNeon,
+                size: Responsive.fontSize(context, 22),
               ),
               onPressed: () => Navigator.pop(context),
             )
           : null,
 
-      title:
-          title != null &&
-              showBackButton // अगर title दिया है और back button दिख रहा है
+      title: title != null && showBackButton
           ? Text(
-              // Custom title display
               title!,
               style: TextStyle(
                 color: textLightColor,
-                fontSize: 20,
+                fontSize: Responsive.fontSize(context, 18),
                 fontWeight: FontWeight.w600,
               ),
             )
-          : _buildLogo(), // अगर title नहीं है या back button नहीं है, तो logo दिखाएँ
+          : _buildLogo(context),
 
-      actions: const [], // No actions
+      actions: [
+        Stack(
+          children: [
+            IconButton(
+              onPressed: () async {
+                SharedPreferences prefs = await SharedPreferences.getInstance();
+                prefs.setBool("hasUnreadMessages", false);
+
+                if (context.mounted) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SupportChatScreen(),
+                    ),
+                  );
+                }
+              },
+              icon: Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: accentNeon,
+                size: 28,
+              ),
+            ),
+
+            // 🔴 RED DOT
+            if (hasUnread)
+              Positioned(
+                right: 10,
+                top: 10,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.redAccent.withOpacity(0.8),
+                        blurRadius: 6,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(width: 6),
+      ],
     );
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../utils/responsive.dart';
 
 // --- DARK THEME CONSTANTS (Global Consistency) ---
 const Color primaryDarkColor = Color(
@@ -54,13 +55,16 @@ class CustomSearchBar extends StatelessWidget {
   }
 
   // Dark Theme Filter Button (Neon Accent)
-  Widget _buildFilterButton() {
+  Widget _buildFilterButton(BuildContext context) {
     return GestureDetector(
       onTap: onFilterTap,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-        padding: const EdgeInsets.all(
-          6,
+        margin: EdgeInsets.symmetric(
+          vertical: Responsive.isSmall(context) ? 6 : 8,
+          horizontal: 8,
+        ),
+        padding: EdgeInsets.all(
+          Responsive.isSmall(context) ? 6 : 8,
         ), // Padding to make the icon container visible
         decoration: BoxDecoration(
           color:
@@ -104,7 +108,7 @@ class CustomSearchBar extends StatelessWidget {
       // If we have a filter, put the clear button/spacer and the filter button
       suffix = Row(
         mainAxisSize: MainAxisSize.min,
-        children: [clearButtonWidget, _buildFilterButton()],
+        children: [clearButtonWidget, _buildFilterButton(context)],
       );
     } else {
       // If no filter, suffix is just the dynamic clear button
@@ -112,7 +116,10 @@ class CustomSearchBar extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12),
+      padding: Responsive.contentPadding(context).copyWith(
+        top: Responsive.isSmall(context) ? 10 : 12,
+        bottom: Responsive.isSmall(context) ? 8 : 12,
+      ),
       child: TextField(
         controller: controller,
         autofocus: autofocus,
@@ -127,7 +134,12 @@ class CustomSearchBar extends StatelessWidget {
           ), // Dark background par subtle hint
           // Design Change: Search Icon (Neon Accent)
           prefixIcon:
-              prefixIcon ?? Icon(Icons.search_rounded, color: accentNeon),
+              prefixIcon ??
+              Icon(
+                Icons.search_rounded,
+                color: accentNeon,
+                size: Responsive.isSmall(context) ? 20 : 24,
+              ),
           suffixIcon: suffix,
           filled: true,
           fillColor: searchBarDarkFill, // Dark Fill Color
